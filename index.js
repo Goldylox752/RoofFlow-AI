@@ -1,49 +1,3 @@
-async function submitLead(){
-  const name = document.getElementById("home_name").value.trim();
-  const phone = document.getElementById("home_phone").value.trim();
-  const city = document.getElementById("home_city").value.trim();
-  const issue = document.getElementById("home_issue").value.trim();
-  const status = document.getElementById("leadStatus");
-
-  if(!name || !phone || !city){
-    status.innerText = "Please fill in required fields.";
-    return;
-  }
-
-  status.innerText = "Submitting...";
-
-  try {
-    // Save to Supabase
-    await supabase.from("homeowner_leads").insert([
-      {
-        name,
-        phone,
-        city,
-        issue,
-        created_at: new Date().toISOString()
-      }
-    ]);
-
-    // OPTIONAL: Discord notification (RECOMMENDED)
-    await fetch("YOUR_DISCORD_WEBHOOK_URL", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        content: `🚨 NEW ROOF LEAD\n👤 ${name}\n📍 ${city}\n🛠️ ${issue}\n📞 ${phone}`
-      })
-    });
-
-    status.innerText = "Submitted! A roofer will contact you shortly.";
-
-  } catch (err){
-    console.error(err);
-    status.innerText = "Error submitting lead.";
-  }
-}
-
-
 require("dotenv").config();
 
 const express = require("express");
@@ -51,11 +5,11 @@ const Stripe = require("stripe");
 const bodyParser = require("body-parser");
 const { createClient } = require("@supabase/supabase-js");
 
+const app = express();
+
 // =========================
 // INIT
 // =========================
-const app = express();
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const supabase = createClient(
@@ -64,37 +18,75 @@ const supabase = createClient(
 );
 
 // =========================
-// MIDDLEWARE
+// WEBHOOK (RAW BODY FIRST)
 // =========================
-
-// IMPORTANT:
-// Stripe webhook MUST come BEFORE express.json()
-// and MUST use raw body ONLY on that route
-
 app.post(
   "/api/stripe-webhook",
-  bodyParser.raw({ type: "application/json" })
+  bodyParser.raw({ type: "application/json" }),
+  async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("❌ Stripe signature error:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object;
+
+        const email = session.metadata?.email;
+        const customerId = session.customer;
+
+        if (!email) return res.json({ received: true });
+
+        // Activate contractor
+        await supabase
+          .from("contractors")
+          .update({
+            active: true,
+            stripe_customer_id: customerId
+          })
+          .eq("email", email);
+
+        console.log("✅ Contractor activated:", email);
+      }
+
+      return res.json({ received: true });
+
+    } catch (err) {
+      console.error("❌ Webhook error:", err.message);
+      return res.status(500).json({ error: "Webhook failed" });
+    }
+  }
 );
 
+// =========================
+// NORMAL MIDDLEWARE
+// =========================
 app.use(express.json());
 
 // =========================
-// HEALTH CHECK
+// HEALTH
 // =========================
 app.get("/", (req, res) => {
-  res.status(200).send("RoofFlow AI SaaS Engine Running 🚀");
+  res.send("🚀 RoofFlow Backend Running");
 });
 
 // =========================
-// STRIPE CHECKOUT SESSION
+// CREATE STRIPE SESSION
 // =========================
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: "Email is required" });
-    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -104,116 +96,89 @@ app.post("/api/create-checkout-session", async (req, res) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "RoofFlow AI - Roofing Lead System",
+              name: "RoofFlow Lead System",
             },
             unit_amount: 49700,
-            recurring: {
-              interval: "month",
-            },
+            recurring: { interval: "month" }
           },
-          quantity: 1,
-        },
+          quantity: 1
+        }
       ],
-      metadata: {
-        email,
-      },
+      metadata: { email },
       success_url: "https://yourdomain.com/success",
-      cancel_url: "https://yourdomain.com/cancel",
+      cancel_url: "https://yourdomain.com"
     });
 
-    return res.json({ id: session.id });
+    res.json({ id: session.id });
 
   } catch (err) {
-    console.error("❌ Checkout session error:", err.message);
-    return res.status(500).json({ error: "Failed to create checkout session" });
+    console.error(err);
+    res.status(500).json({ error: "Stripe error" });
   }
 });
 
 // =========================
-// STRIPE WEBHOOK
+// NEW LEAD ROUTER (IMPORTANT)
 // =========================
-app.post("/api/stripe-webhook", async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-
-  let event;
-
-  // Verify Stripe signature
+app.post("/api/new-lead", async (req, res) => {
   try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.error("❌ Stripe webhook signature failed:", err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    const { name, phone, city, issue } = req.body;
 
-  try {
-    // =========================
-    // HANDLE SUCCESSFUL PAYMENT
-    // =========================
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-
-      const email = session.metadata?.email;
-
-      if (!email) {
-        console.warn("⚠️ Missing email in Stripe metadata");
-        return res.json({ received: true });
-      }
-
-      const customerId = session.customer;
-
-      // Check if tenant exists
-      const { data: existing, error } = await supabase
-        .from("tenants")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle();
-
-      if (error) {
-        console.error("❌ Supabase fetch error:", error.message);
-      }
-
-      if (existing) {
-        // Update existing tenant
-        const { error: updateError } = await supabase
-          .from("tenants")
-          .update({
-            status: "active",
-            stripe_customer_id: customerId,
-          })
-          .eq("email", email);
-
-        if (updateError) {
-          console.error("❌ Supabase update error:", updateError.message);
-        }
-
-      } else {
-        // Create new tenant
-        const { error: insertError } = await supabase
-          .from("tenants")
-          .insert([
-            {
-              email,
-              stripe_customer_id: customerId,
-              plan: "growth",
-              status: "active",
-            },
-          ]);
-
-        if (insertError) {
-          console.error("❌ Supabase insert error:", insertError.message);
-        }
-      }
+    if (!name || !phone || !city) {
+      return res.status(400).json({ error: "Missing fields" });
     }
 
-    return res.json({ received: true });
+    // Save lead
+    const { data: lead } = await supabase
+      .from("homeowner_leads")
+      .insert([{ name, phone, city, issue }])
+      .select()
+      .single();
+
+    // Find active contractors
+    const { data: contractors } = await supabase
+      .from("contractors")
+      .select("*")
+      .eq("city", city)
+      .eq("active", true);
+
+    if (!contractors || contractors.length === 0) {
+      return res.json({ success: true, note: "No contractors yet" });
+    }
+
+    // Send to ONE contractor
+    for (const c of contractors) {
+
+      if (c.leads_received >= c.max_leads) continue;
+
+      // SMS hook
+      await fetch(process.env.SMS_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          to: c.phone,
+          message: `🔥 New roofing lead\n${city}\n${issue}\n${phone}`
+        })
+      });
+
+      // Update usage
+      await supabase
+        .from("contractors")
+        .update({
+          leads_received: c.leads_received + 1
+        })
+        .eq("id", c.id);
+
+      break;
+    }
+
+    res.json({ success: true });
 
   } catch (err) {
-    console.error("❌ Webhook processing error:", err.message);
-    return res.status(500).json({ error: "Webhook handler failed" });
+    console.error(err);
+    res.status(500).json({ error: "Lead routing failed" });
   }
 });
 
@@ -223,5 +188,5 @@ app.post("/api/stripe-webhook", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 SaaS Server running on port ${PORT}`);
+  console.log(`🚀 Running on port ${PORT}`);
 });
