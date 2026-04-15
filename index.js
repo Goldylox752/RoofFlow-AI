@@ -1,3 +1,12 @@
+await supabase.from("leads").insert([lead]);
+
+// send SMS instantly
+await client.messages.create({
+  body: `New Roofing Lead:\n${lead.name}\n${lead.phone}\n${lead.location}`,
+  from: process.env.TWILIO_NUMBER,
+  to: process.env.RECEIVER_NUMBER
+});
+
 const twilio = require("twilio");
 
 const client = twilio(
