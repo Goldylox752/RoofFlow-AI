@@ -36,6 +36,11 @@ p{color:#cbd5f5;line-height:1.5}
   margin-top:15px;
 }
 
+.btn:disabled{
+  opacity:0.6;
+  cursor:not-allowed;
+}
+
 .section{margin-top:70px}
 
 input{
@@ -84,7 +89,7 @@ input{
 <section>
 <span class="badge">AI Roofing Acquisition System</span>
 <h1>Automated Roofing Jobs On Demand</h1>
-<p>We generate, filter, and deliver real homeowner roofing jobs automatically.</p>
+<p>We generate, filter, and deliver real roofing leads automatically.</p>
 
 <button class="btn" onclick="showStep()">Check Availability In Your Area</button>
 </section>
@@ -95,7 +100,9 @@ input{
 <input id="city" placeholder="Enter your city">
 <input id="type" placeholder="Roofing service type (repair, storm, replacement)">
 
-<button class="btn" onclick="startCheckout()">Activate System</button>
+<button class="btn" id="activateBtn" onclick="startCheckout()">
+Activate System
+</button>
 
 <p id="status" style="margin-top:10px;color:#cbd5f5;"></p>
 </section>
@@ -109,12 +116,16 @@ input{
 
 <script>
 // =========================
-// SUPABASE INIT
+// CONFIG
 // =========================
+
+// Supabase (PUBLIC anon key ONLY)
 const supabaseUrl = "YOUR_SUPABASE_URL";
 const supabaseKey = "YOUR_SUPABASE_ANON_KEY";
-
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// Backend API (Vercel)
+const API_BASE = "";
 
 // =========================
 // UI
@@ -125,7 +136,7 @@ function showStep(){
 }
 
 // =========================
-// MAIN FLOW
+// MAIN FLOW (FIXED STRIPE FLOW)
 // =========================
 let isProcessing = false;
 
@@ -135,9 +146,8 @@ async function startCheckout(){
   const city = document.getElementById("city").value.trim();
   const type = document.getElementById("type").value.trim();
   const status = document.getElementById("status");
-  const btn = document.querySelector("#stepSection .btn");
+  const btn = document.getElementById("activateBtn");
 
-  // validation
   if (!city || !type) {
     status.innerText = "Please fill in both fields.";
     return;
@@ -145,19 +155,17 @@ async function startCheckout(){
 
   isProcessing = true;
 
-  // UX
   btn.innerText = "Processing...";
   btn.disabled = true;
-  status.innerText = "Saving your lead...";
+  status.innerText = "Creating secure checkout session...";
 
-  // save local
-  localStorage.setItem("lead_city", city);
-  localStorage.setItem("lead_type", type);
+  try {
+    // Save locally
+    localStorage.setItem("lead_city", city);
+    localStorage.setItem("lead_type", type);
 
-  // save supabase
-  const { error } = await supabase
-    .from("leads")
-    .insert([
+    // Save lightweight lead (optional tracking)
+    await supabase.from("leads").insert([
       {
         city,
         type,
@@ -165,28 +173,41 @@ async function startCheckout(){
       }
     ]);
 
-  if (error) {
-    console.error(error);
-    status.innerText = "Error saving lead. Try again.";
+    // CALL YOUR VERCEL STRIPE API
+    const res = await fetch("/api/create-checkout-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email: "guest@user.com" })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Checkout failed");
+    }
+
+    status.innerText = "Redirecting to payment...";
+
+    // Redirect to Stripe Checkout
+    const stripe = Stripe("YOUR_STRIPE_PUBLISHABLE_KEY");
+    await stripe.redirectToCheckout({ sessionId: data.id });
+
+  } catch (err) {
+    console.error(err);
+    status.innerText = "Error: " + err.message;
     btn.innerText = "Activate System";
     btn.disabled = false;
     isProcessing = false;
-    return;
   }
-
-  // success state
-  status.innerText = "Lead captured successfully. Redirecting...";
-
-  setTimeout(() => {
-    window.location.href = "https://buy.stripe.com/test_YOUR_LINK";
-  }, 800);
 }
 
 // =========================
-// LIVE FEED
+// LIVE FEED (UNCHANGED BUT CLEANED)
 // =========================
 const cities = ["Dallas", "Houston", "Calgary", "Toronto", "Phoenix"];
-const types = ["Roof Leak", "Storm Damage", "Inspection Request", "Roof Replacement"];
+const types = ["Roof Leak", "Storm Damage", "Inspection", "Replacement"];
 
 function addLead(){
   const div = document.createElement("div");
@@ -212,6 +233,9 @@ function addLead(){
 for(let i=0;i<4;i++) addLead();
 setInterval(addLead, 3500);
 </script>
+
+<!-- Stripe JS -->
+<script src="https://js.stripe.com/v3/"></script>
 
 </body>
 </html>
