@@ -1,4 +1,20 @@
+if (event.type === "checkout.session.completed") {
+  const session = event.data.object;
+  const email = session.customer_details?.email;
 
+  const tier =
+    session.amount_total === 9900 ? "starter" :
+    session.amount_total === 29900 ? "pro" :
+    "elite";
+
+  await supabase
+    .from("contractors")
+    .update({
+      subscription_status: "active",
+      subscription_tier: tier
+    })
+    .eq("email", email);
+}
 
 
 
