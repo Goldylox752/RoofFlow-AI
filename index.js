@@ -1,3 +1,61 @@
+<script>
+
+// INIT SUPABASE
+const supabase = window.supabase.createClient(
+  "YOUR_SUPABASE_URL",
+  "YOUR_SUPABASE_ANON_KEY"
+);
+
+// 🔥 STRIPE CHECKOUT LINK
+const STRIPE_LINK = "https://buy.stripe.com/YOUR_LINK";
+
+// SCROLL
+function scrollToForm(){
+  document.getElementById("form").scrollIntoView({ behavior: "smooth" });
+}
+
+// SUBMIT + PAY FLOW
+async function submitLead(){
+
+  const name = document.getElementById("name").value;
+  const email = document.getElementById("email").value;
+  const city = document.getElementById("city").value;
+  const status = document.getElementById("status");
+
+  if(!name || !email || !city){
+    status.innerText = "Please complete all fields.";
+    return;
+  }
+
+  status.innerText = "Checking territory availability...";
+
+  try{
+
+    // Save lead first
+    await supabase
+      .from("leads")
+      .insert([{ name, email, city, status: "pending" }]);
+
+    // Soft close (important for conversion)
+    status.innerText = "Territory available. Locking your city...";
+
+    // Redirect to Stripe checkout
+    setTimeout(() => {
+      window.location.href =
+        STRIPE_LINK +
+        "?prefilled_email=" + encodeURIComponent(email);
+    }, 1200);
+
+  }catch(err){
+    console.error(err);
+    status.innerText = "System error. Please try again.";
+  }
+}
+
+</script>
+
+
+
 if(event.type === "checkout.session.completed"){
 
   const session = event.data.object;
