@@ -64,6 +64,7 @@ nav{
   margin:auto;
 }
 
+/* PLAN CARD */
 .plan{
   background:#111827;
   padding:22px;
@@ -71,6 +72,18 @@ nav{
   border-radius:12px;
   border:1px solid rgba(255,255,255,0.08);
   text-align:left;
+  transition:0.2s;
+}
+
+/* HIGHLIGHT PRO (MOST IMPORTANT FOR SALES) */
+.plan.pro{
+  border:2px solid #4f46e5;
+  transform:scale(1.02);
+}
+
+/* ELITE PREMIUM LOOK */
+.plan.elite{
+  border:2px solid #22c55e;
 }
 
 .plan h3{
@@ -82,11 +95,10 @@ nav{
   margin-bottom:10px;
 }
 
-/* PRICING TAG */
+/* PRICE */
 .price{
   font-size:18px;
   font-weight:700;
-  color:#22c55e;
   margin-bottom:10px;
 }
 
@@ -102,7 +114,12 @@ button{
   cursor:pointer;
 }
 
-/* GREEN BUTTON */
+/* ELITE BUTTON OVERRIDE */
+.plan.elite button{
+  background:#22c55e;
+}
+
+/* UNLOCK */
 .unlock{
   margin-top:20px;
   background:#22c55e;
@@ -147,35 +164,35 @@ input{
 <section id="paywall" class="section paywall">
 
   <h2>Unlock Territory Access</h2>
-  <p>Choose your plan to activate the system</p>
+  <p>Choose your level of control</p>
 
   <!-- STARTER -->
   <div class="plan">
     <h3>Starter Leads</h3>
     <div class="price">$99</div>
-    <p>Basic lead access + entry into system</p>
+    <p>Entry access to lead system — basic pipeline access</p>
     <a href="https://buy.stripe.com/dRmfZae1d2eoeofgLK2ZO0C">
       <button>Buy Starter</button>
     </a>
   </div>
 
-  <!-- PRO -->
-  <div class="plan">
-    <h3>Pro Territory</h3>
+  <!-- PRO (MAIN SELLER) -->
+  <div class="plan pro">
+    <h3>Pro Territory <span style="color:#4f46e5;">(Recommended)</span></h3>
     <div class="price">$299</div>
-    <p>Priority leads + AI workflow + faster deal flow</p>
+    <p>Priority AI leads + automated workflow + faster closing system</p>
     <a href="https://buy.stripe.com/aFaeV6cX97yIfsjcvu2ZO0E">
-      <button>Buy Pro (Recommended)</button>
+      <button>Upgrade to Pro</button>
     </a>
   </div>
 
-  <!-- ELITE -->
-  <div class="plan">
+  <!-- ELITE (TOP TIER) -->
+  <div class="plan elite">
     <h3>Elite Exclusive Territory</h3>
     <div class="price">$999</div>
-    <p>Full city lock + premium AI leads + exclusivity</p>
+    <p>Full city exclusivity + premium AI leads + locked territory rights</p>
     <a href="https://buy.stripe.com/dRm28k8GTaKU1Btcvu2ZO0D">
-      <button>Buy Elite</button>
+      <button>Unlock Elite Territory</button>
     </a>
   </div>
 
@@ -228,7 +245,7 @@ function unlockAccess(){
   document.getElementById("app").classList.remove("hidden");
 }
 
-/* auto unlock */
+/* AUTO CHECK */
 window.onload = function(){
   if(localStorage.getItem("paid_access") === "true"){
     document.getElementById("paywall").style.display = "none";
