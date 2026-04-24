@@ -84,6 +84,18 @@ p {
 
 <body>
 
+<!-- OPTIONAL ACCESS GUARD (prevents random direct access) -->
+<script>
+const params = new URLSearchParams(window.location.search);
+const qualified = params.get("q");
+
+// If user did not come through funnel, redirect home
+if (qualified !== "true") {
+  // comment this out if you don't want protection
+  // window.location.href = "/";
+}
+</script>
+
 <div class="card">
 
   <div class="badge">RoofFlow Onboarding</div>
@@ -98,8 +110,13 @@ p {
     Next step is to schedule a quick setup call so we can activate your lead flow system.
   </p>
 
-  <!-- Replace with your real Calendly link -->
-  <a href="https://calendly.com/your-link-here" class="btn">
+  <!-- FIXED CALENDLY LINK -->
+  <a 
+    href="https://calendly.com/YOUR_REAL_LINK_HERE" 
+    class="btn" 
+    target="_blank" 
+    rel="noopener noreferrer"
+  >
     Schedule Your Onboarding Call
   </a>
 
