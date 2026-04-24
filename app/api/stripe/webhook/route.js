@@ -14,6 +14,14 @@ const supabase = createClient(
 export async function POST(req) {
   try {
     const signature = headers().get("stripe-signature");
+
+    if (!signature) {
+      return new Response(
+        "Missing Stripe signature",
+        { status: 400 }
+      );
+    }
+
     const rawBody = await req.text();
 
     const event = stripe.webhooks.constructEvent(
@@ -28,13 +36,19 @@ export async function POST(req) {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
 
-      await supabase.from("subscriptions").upsert({
-        user_id: session.metadata?.user_id || null,
-        stripe_customer_id: session.customer,
-        plan: session.metadata?.plan || "starter",
-        status: "active",
-        updated_at: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from("subscriptions")
+        .upsert({
+          user_id: session.metadata?.user_id || null,
+          stripe_customer_id: session.customer,
+          plan: session.metadata?.plan || "starter",
+          status: "active",
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error("Supabase upsert error:", error);
+      }
     }
 
     // =========================
