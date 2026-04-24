@@ -12,11 +12,9 @@ export async function runQueueBrain(org_id) {
   const lockKey = `queue_lock_${org_id}`;
 
   try {
-    // 1. GLOBAL QUEUE LOCK (prevents double runs)
     const locked = await acquireLock(lockKey);
     if (!locked) return;
 
-    // 2. LOAD ROUTING CONFIG
     const { data: rules } = await supabase
       .from("routing_rules")
       .select("*")
@@ -28,7 +26,6 @@ export async function runQueueBrain(org_id) {
       priority_boost: true
     };
 
-    // 3. FETCH QUEUED LEADS (PRIORITY SORTED)
     const { data: leads } = await supabase
       .from("lead_queue")
       .select("*")
@@ -39,7 +36,6 @@ export async function runQueueBrain(org_id) {
 
     if (!leads?.length) return releaseLock(lockKey);
 
-    // 4. FETCH AGENTS
     const { data: agents } = await supabase
       .from("agents")
       .select("*")
@@ -48,20 +44,13 @@ export async function runQueueBrain(org_id) {
 
     if (!agents?.length) return releaseLock(lockKey);
 
-    // 5. PROCESS LEADS
     for (const lead of leads) {
       const agent = pickBestAgent(agents, routing);
 
       if (!agent) continue;
-
       if (agent.active_leads >= agent.capacity) continue;
 
-      await assignLead({
-        lead,
-        agent,
-        org_id,
-        routing
-      });
+      await assignLead({ lead, agent, org_id, routing });
     }
 
   } catch (err) {
@@ -72,64 +61,44 @@ export async function runQueueBrain(org_id) {
 }
 
 /* =========================
-   INTELLIGENT AGENT SCORING
+   AGENT SELECTION
 ========================= */
 function pickBestAgent(agents, routing) {
   return agents
-    .map(agent => ({
-      ...agent,
-      score: computeAgentScore(agent, routing)
+    .map(a => ({
+      ...a,
+      score: computeAgentScore(a, routing)
     }))
     .sort((a, b) => b.score - a.score)[0];
 }
 
-/* =========================
-   AGENT SCORING ENGINE
-========================= */
 function computeAgentScore(agent, routing) {
   const capacityScore = (agent.capacity - agent.active_leads) * 10;
+  const loadPenalty = agent.active_leads * 5;
 
   const speedBonus =
     routing.mode === "ai_priority"
-      ? agent.avg_response_speed || 1
+      ? agent.avg_response_speed || 0
       : 0;
-
-  const loadPenalty = agent.active_leads * 5;
 
   return capacityScore + speedBonus - loadPenalty;
 }
 
 /* =========================
-   LEAD ASSIGNMENT (ATOMIC STATE)
+   LEAD ASSIGNMENT
 ========================= */
 async function assignLead({ lead, agent, org_id, routing }) {
-  // 1. LOCK LEAD (prevents duplicate assignment)
-  const { error: lockError } = await supabase
+  const { error } = await supabase
     .from("lead_queue")
-    .update({ status: "processing" })
+    .update({
+      status: "processing",
+      assigned_agent_id: agent.id
+    })
     .eq("id", lead.id)
     .eq("status", "queued");
 
-  if (lockError) return;
+  if (error) return;
 
-  // 2. ASSIGN LEAD
-  await supabase
-    .from("lead_queue")
-    .update({
-      status: "assigned",
-      assigned_agent_id: agent.id
-    })
-    .eq("id", lead.id);
-
-  // 3. UPDATE AGENT LOAD
-  await supabase
-    .from("agents")
-    .update({
-      active_leads: agent.active_leads + 1
-    })
-    .eq("id", agent.id);
-
-  // 4. HISTORY LOG
   await supabase.from("assignment_history").insert({
     org_id,
     lead_id: lead.lead_id,
@@ -138,7 +107,6 @@ async function assignLead({ lead, agent, org_id, routing }) {
     created_at: new Date().toISOString()
   });
 
-  // 5. REALTIME EVENT STREAM
   await supabase.from("events").insert({
     type: "lead_assigned",
     org_id,
@@ -152,12 +120,12 @@ async function assignLead({ lead, agent, org_id, routing }) {
 }
 
 /* =========================
-   SIMPLE LOCK SYSTEM
+   SAFE LOCK SYSTEM (FIXED)
 ========================= */
 async function acquireLock(key) {
   const { data } = await supabase
     .from("locks")
-    .insert({ key, created_at: new Date().toISOString() })
+    .insert({ key })
     .select()
     .maybeSingle();
 
