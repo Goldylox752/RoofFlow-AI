@@ -17,37 +17,50 @@ export async function POST(req) {
       city,
       monthly_jobs,
       lead_spend,
-      team_size
+      team_size,
+      website
     } = body;
+
+    // =========================
+    // HONEYPOT ANTI-SPAM
+    // =========================
+    if (website) {
+      return Response.json(
+        { error: "Spam detected" },
+        { status: 400 }
+      );
+    }
 
     // =========================
     // QUALIFICATION LOGIC
     // =========================
-    let qualified = true;
-
-    if (monthly_jobs === "0–5") qualified = false;
-    if (lead_spend === "$0") qualified = false;
+    const qualified =
+      monthly_jobs !== "0–5" &&
+      lead_spend !== "$0";
 
     // =========================
     // SAVE TO SUPABASE
     // =========================
-    const { error } = await supabase.from("applications").insert({
-      name,
-      phone,
-      email,
-      company,
-      city,
-      monthly_jobs,
-      lead_spend,
-      team_size,
-      qualified,
-      created_at: new Date().toISOString()
-    });
+    const { error } = await supabase
+      .from("applications")
+      .insert({
+        name,
+        phone,
+        email,
+        company,
+        city,
+        monthly_jobs,
+        lead_spend,
+        team_size,
+        qualified,
+        created_at: new Date().toISOString()
+      });
 
     if (error) {
       console.error("Supabase error:", error);
+
       return Response.json(
-        { error: "Database insert failed" },
+        { error: error.message },
         { status: 500 }
       );
     }
