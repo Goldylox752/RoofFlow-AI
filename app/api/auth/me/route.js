@@ -1,38 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+export const dynamic = "force-dynamic";
 
-export default async function handler(req, res) {
-  const userId = req.headers["x-user-id"];
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!userId) {
-    return res.json({ access: false });
+  if (!url || !key) {
+    throw new Error("Missing Supabase env vars");
   }
 
-  const { data } = await supabase
-    .from("subscriptions")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle();
+  return createClient(url, key);
+}
 
-  if (!data) {
-    return res.json({ access: false });
-  }
+export async function GET() {
+  const supabase = getSupabase();
 
-  // MODULE PERMISSIONS
-  const permissions = {
-    basic: ["tools"],
-    pro: ["tools", "leads", "roof_flow"],
-    enterprise: ["tools", "leads", "roof_flow", "marketplace", "admin"]
-  };
-
-  return res.json({
-    access: true,
-    plan: data.plan,
-    modules: permissions[data.plan] || []
-  });
+  return Response.json({ ok: true });
 }
