@@ -2,7 +2,6 @@ import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// 💰 Updated pricing (HIGHER VALUE POSITIONING)
 const PRICES = {
   starter: {
     amount: 9900, // $99
@@ -22,7 +21,6 @@ export async function POST(req) {
   try {
     const { plan, email, phone } = await req.json();
 
-    // validate plan
     if (!PRICES[plan]) {
       return Response.json({ error: "Invalid plan" }, { status: 400 });
     }
@@ -39,7 +37,6 @@ export async function POST(req) {
             currency: "usd",
             product_data: {
               name: selected.name,
-              description: `RoofFlow ${plan} plan - automated lead system`,
             },
             unit_amount: selected.amount,
           },
@@ -47,7 +44,7 @@ export async function POST(req) {
         },
       ],
 
-      // 🔥 CRITICAL: used by webhook + DB + dashboard unlock
+      // 🔥 THIS IS WHAT CONNECTS EVERYTHING
       metadata: {
         plan,
         email: email || "",
@@ -60,7 +57,7 @@ export async function POST(req) {
 
     return Response.json({ url: session.url });
   } catch (err) {
-    console.error("Stripe error:", err.message);
+    console.error(err);
     return Response.json({ error: "Checkout failed" }, { status: 500 });
   }
 }
