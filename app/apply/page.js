@@ -4,40 +4,30 @@ import { useState } from "react";
 
 export default function Apply() {
   const [step, setStep] = useState(1);
-
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [plan, setPlan] = useState("growth"); // default middle tier
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ✅ Email validation
-  const isValidEmail = (email) => {
-    return /\S+@\S+\.\S+/.test(email);
-  };
+  const isValidEmail = (email) => /\S+@\S+\.\S+/.test(email);
 
-  // ✅ Basic North America phone validation
-  const isValidPhone = (phone) => {
-    return /^[0-9]{10,15}$/.test(phone.replace(/\D/g, ""));
-  };
+  const isValidPhone = (phone) =>
+    /^[0-9]{10,15}$/.test(phone.replace(/\D/g, ""));
 
-  // 🎯 SIMPLE LEAD SCORING (BEFORE STRIPE)
   const scoreLead = () => {
     let score = 0;
-
     if (isValidEmail(email)) score += 50;
     if (isValidPhone(phone)) score += 50;
-
     return score;
   };
 
   const handleNext = () => {
     setError("");
-
     if (!isValidEmail(email)) {
       return setError("Please enter a valid email.");
     }
-
     setStep(2);
   };
 
@@ -51,17 +41,20 @@ export default function Apply() {
 
     const leadScore = scoreLead();
 
-    // 🚨 BLOCK LOW QUALITY LEADS
     if (leadScore < 80) {
       return setError("Sorry, we can only accept qualified contractors.");
     }
 
     setLoading(true);
 
-    const res = await fetch("/api/create-checkout-session", {
+    const res = await fetch("/api/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, phone }),
+      body: JSON.stringify({
+        email,
+        phone,
+        plan, // 🔥 THIS CONNECTS TO STRIPE PRICING
+      }),
     });
 
     const data = await res.json();
@@ -78,16 +71,28 @@ export default function Apply() {
       <div style={styles.card}>
         <h1 style={styles.h1}>Apply to RoofFlow</h1>
 
-        {/* STEP INDICATOR */}
         <p style={styles.step}>Step {step} of 2</p>
 
-        {/* TRUST BADGES */}
         <p style={styles.badges}>
           🔒 No spam · ⚡ Instant approval · 🏠 Exclusive leads only
         </p>
 
+        {/* 🧠 PLAN SELECTOR (NEW) */}
+        <div style={styles.planBox}>
+          <p style={{ fontSize: 12 }}>Choose Plan</p>
+
+          <select
+            value={plan}
+            onChange={(e) => setPlan(e.target.value)}
+            style={styles.select}
+          >
+            <option value="starter">Starter — $99</option>
+            <option value="growth">Growth — $199</option>
+            <option value="domination">Domination — $399</option>
+          </select>
+        </div>
+
         <form onSubmit={handleSubmit} style={styles.form}>
-          {/* STEP 1 */}
           {step === 1 && (
             <>
               <label style={styles.label}>Email</label>
@@ -98,17 +103,12 @@ export default function Apply() {
                 style={styles.input}
               />
 
-              <button
-                type="button"
-                onClick={handleNext}
-                style={styles.button}
-              >
+              <button type="button" onClick={handleNext} style={styles.button}>
                 Continue
               </button>
             </>
           )}
 
-          {/* STEP 2 */}
           {step === 2 && (
             <>
               <label style={styles.label}>Phone Number</label>
@@ -125,7 +125,6 @@ export default function Apply() {
             </>
           )}
 
-          {/* ERROR */}
           {error && <p style={styles.error}>{error}</p>}
         </form>
       </div>
@@ -140,7 +139,6 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     background: "#0b1220",
-    fontFamily: "Arial",
     color: "white",
     padding: 20,
   },
@@ -151,43 +149,37 @@ const styles = {
     background: "#111a2e",
     padding: 30,
     borderRadius: 12,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
   },
 
-  h1: {
-    fontSize: 26,
-    marginBottom: 10,
+  h1: { fontSize: 26 },
+
+  step: { fontSize: 14, opacity: 0.7 },
+
+  badges: { fontSize: 12, opacity: 0.7, marginBottom: 15 },
+
+  planBox: {
+    marginBottom: 15,
   },
 
-  step: {
-    fontSize: 14,
-    opacity: 0.7,
+  select: {
+    width: "100%",
+    padding: 10,
+    borderRadius: 6,
+    background: "#0b1220",
+    color: "white",
+    border: "1px solid #333",
   },
 
-  badges: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginBottom: 20,
-  },
+  form: { display: "flex", flexDirection: "column", gap: 10 },
 
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  },
-
-  label: {
-    fontSize: 12,
-    opacity: 0.8,
-  },
+  label: { fontSize: 12 },
 
   input: {
     padding: 12,
     borderRadius: 8,
-    border: "1px solid rgba(255,255,255,0.1)",
     background: "#0b1220",
     color: "white",
-    outline: "none",
+    border: "1px solid #333",
   },
 
   button: {
@@ -201,8 +193,5 @@ const styles = {
     fontWeight: "bold",
   },
 
-  error: {
-    color: "#ff6b6b",
-    fontSize: 12,
-  },
+  error: { color: "#ff6b6b", fontSize: 12 },
 };
