@@ -1,13 +1,12 @@
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { sendSMS } from "@/lib/sendSMS";
-import { scoreLeadAsync } from "@/lib/scoreLeadAsync";
+import { enqueueLead } from "@/lib/queueLead";
 
 export const runtime = "nodejs";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// safe Supabase (server only)
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -19,15 +18,10 @@ function getSupabase() {
 
 export async function POST(req) {
   const sig = req.headers.get("stripe-signature");
-
-  if (!sig) {
-    return new Response("Missing signature", { status: 400 });
-  }
-
   const body = await req.text();
+
   let event;
 
-  // ✅ verify webhook
   try {
     event = stripe.webhooks.constructEvent(
       body,
@@ -35,11 +29,9 @@ export async function POST(req) {
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("Webhook verification failed:", err.message);
     return new Response("Webhook Error", { status: 400 });
   }
 
-  // 🎯 ONLY handle successful checkout
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
@@ -48,33 +40,26 @@ export async function POST(req) {
 
     const supabase = getSupabase();
 
-    // ✅ update DB (non-blocking safe)
+    // 🟢 DB update (safe)
     if (supabase && email) {
-      const { error } = await supabase
+      await supabase
         .from("leads")
         .update({ status: "active" })
         .eq("email", email);
-
-      if (error) {
-        console.error("Supabase update error:", error.message);
-      }
     }
 
-    // 📲 SMS (isolated failure-safe)
+    // 📲 SMS (safe wrapped)
     if (phone) {
       try {
-        await sendSMS(
-          phone,
-          "RoofFlow Approved 🎉 Book onboarding: https://calendly.com/your-link"
-        );
-      } catch (smsError) {
-        console.error("SMS failed:", smsError.message);
+        await sendSMS(phone, "RoofFlow Approved 🎉 Book onboarding: https://calendly.com/...");
+      } catch (e) {
+        console.error("SMS failed:", e.message);
       }
     }
 
-    // 🤖 AI (NEVER blocks Stripe)
-    scoreLeadAsync(session.metadata);
+    // 🟡 AI moved to queue (NOT executed here)
+    enqueueLead(session.metadata);
   }
 
-  return new Response("OK", { status: 200 });
+  return new Response("OK");
 }
