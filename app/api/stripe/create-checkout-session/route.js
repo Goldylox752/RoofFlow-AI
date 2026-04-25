@@ -1,11 +1,27 @@
 import Stripe from "stripe";
+import { scoreLead } from "@/lib/leadScore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(req) {
   try {
-    const { email, phone } = await req.json();
+    const { email, phone, answers = {} } = await req.json();
 
+    // 🧠 LEAD SCORING (must be inside handler)
+    const leadScore = scoreLead({ email, phone, answers });
+
+    // 🚨 BLOCK LOW QUALITY LEADS BEFORE STRIPE
+    if (leadScore < 60) {
+      return new Response(
+        JSON.stringify({ error: "Not qualified" }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // 💳 CREATE STRIPE SESSION
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
@@ -22,10 +38,11 @@ export async function POST(req) {
 
       customer_email: email,
 
-      // ✅ THIS is what your webhook reads later
+      // 📦 passed to webhook (SMS + CRM + analytics)
       metadata: {
-        email: email,
-        phone: phone,
+        email,
+        phone,
+        score: leadScore,
         source: "roofflow_apply",
       },
     });
