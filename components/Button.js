@@ -11,18 +11,24 @@ export default function Button({
   const base =
     "px-5 py-3 rounded-xl font-semibold transition duration-200 inline-flex items-center justify-center";
 
-  const styles = {
+  const variants = {
     primary: "bg-blue-600 hover:bg-blue-700 text-white",
     secondary: "bg-gray-800 hover:bg-gray-900 text-white",
-    ghost: "bg-transparent hover:bg-gray-100 text-black",
+    ghost: "bg-transparent hover:bg-white/10 text-white",
   };
 
-  const disabledStyle = disabled ? "opacity-50 cursor-not-allowed" : "";
+  const stateStyles = disabled
+    ? "opacity-50 cursor-not-allowed pointer-events-none"
+    : "";
 
-  const className = `${base} ${styles[variant] || styles.primary} ${disabledStyle}`;
+  const className = [
+    base,
+    variants[variant] || variants.primary,
+    stateStyles,
+  ].join(" ");
 
-  // 🔥 INTERNAL NAVIGATION (Next.js optimized)
-  if (href && href.startsWith("/")) {
+  // 🔗 Internal Next.js link
+  if (href?.startsWith("/")) {
     return (
       <Link href={href} className={className}>
         {children}
@@ -30,7 +36,7 @@ export default function Button({
     );
   }
 
-  // 🔥 EXTERNAL LINK
+  // 🌍 External link
   if (href) {
     return (
       <a
@@ -44,7 +50,7 @@ export default function Button({
     );
   }
 
-  // 🔥 BUTTON
+  // 🔘 Standard button
   return (
     <button
       type={type}
