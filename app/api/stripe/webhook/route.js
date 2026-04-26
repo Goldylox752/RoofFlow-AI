@@ -19,25 +19,31 @@ export async function POST(req) {
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    return Response.json({ error: "Invalid webhook" }, { status: 400 });
+    return Response.json(
+      { error: "Invalid webhook signature" },
+      { status: 400 }
+    );
   }
 
-  // =========================
   // 💰 PAYMENT SUCCESS
-  // =========================
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    const userId = session.metadata.userId;
+    const userId = session.metadata?.userId;
+    const amount = session.amount_total || 0;
 
-    const amount = session.amount_total;
+    if (!userId) {
+      return Response.json(
+        { error: "Missing userId metadata" },
+        { status: 400 }
+      );
+    }
 
     let role = "contractor_basic";
 
     if (amount >= 9900) role = "contractor_pro";
     if (amount >= 24900) role = "contractor_premium";
 
-    // 🔐 UPDATE USER ACCESS
     await supabase
       .from("profiles")
       .update({
@@ -49,12 +55,8 @@ export async function POST(req) {
       .eq("id", userId);
   }
 
-  // =========================
-  // ❌ PAYMENT FAILED / CANCELED
-  // =========================
-  if (
-    event.type === "customer.subscription.deleted"
-  ) {
+  // ❌ SUBSCRIPTION CANCELED
+  if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object;
 
     await supabase
