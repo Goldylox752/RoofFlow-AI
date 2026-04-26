@@ -36,8 +36,9 @@ export default function Apply() {
     const digits = normalizePhone(value).slice(0, 10);
 
     if (digits.length <= 3) return digits;
-    if (digits.length <= 6)
+    if (digits.length <= 6) {
       return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    }
 
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   };
@@ -128,52 +129,57 @@ export default function Apply() {
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-xl bg-white rounded-2xl shadow-md p-8">
 
         {/* Honeypot */}
         <input
           value={website}
           onChange={(e) => setWebsite(e.target.value)}
           style={{ display: "none" }}
-          tabIndex="-1"
+          tabIndex={-1}
+          autoComplete="off"
         />
 
         {/* HEADER */}
-        <h1 style={styles.h1}>
+        <h1 className="text-2xl font-bold text-gray-900">
           Apply for Exclusive Roofing Leads in Your Territory
         </h1>
 
-        <p style={styles.subtext}>
-          We only accept a limited number of contractors per region to maintain lead quality and exclusivity.
+        <p className="text-sm text-gray-600 mt-2">
+          Limited contractor spots per region to maintain lead quality.
         </p>
 
         {/* STATUS */}
-        <p style={{
-          fontSize: 13,
-          fontWeight: "bold",
-          color: isQualified ? "#22c55e" : "#f87171",
-        }}>
+        <p
+          className={`mt-3 text-sm font-bold ${
+            isQualified ? "text-green-600" : "text-red-500"
+          }`}
+        >
           {isQualified
             ? "✅ Pre-Qualified — Priority Access Available"
             : "⚠️ Qualification Required"}
         </p>
 
-        <p style={styles.step}>Step {step} of 2</p>
+        <p className="text-xs text-gray-500 mt-1">
+          Step {step} of 2
+        </p>
 
         {/* TRUST */}
-        <p style={styles.badges}>
+        <p className="text-xs text-gray-400 mt-3">
           🔒 Secure · 🛡️ Spam Protected · ⚡ Instant Approval · 🌎 Limited Territories
         </p>
 
         {/* PLAN */}
-        <div style={styles.planBox}>
-          <p style={styles.labelSmall}>Select Access Level</p>
+        <div className="mt-5">
+          <p className="text-xs font-semibold text-gray-600 mb-1">
+            Select Access Level
+          </p>
 
           <select
             value={plan}
             onChange={(e) => setPlan(e.target.value)}
-            style={styles.select}
+            className="w-full border rounded-lg p-2"
           >
             <option value="starter">Starter — 5–10 Leads ($499/mo)</option>
             <option value="growth">Growth — 15–30 Leads ($999/mo)</option>
@@ -181,20 +187,24 @@ export default function Apply() {
           </select>
         </div>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
 
           {step === 1 && (
             <>
-              <label style={styles.label}>Business Email</label>
+              <label className="text-sm font-medium">Business Email</label>
 
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                style={styles.input}
+                className="w-full border rounded-lg p-2"
               />
 
-              <button type="button" onClick={handleNext} style={styles.button}>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="w-full bg-black text-white py-2 rounded-lg"
+              >
                 Check Availability
               </button>
             </>
@@ -202,23 +212,28 @@ export default function Apply() {
 
           {step === 2 && (
             <>
-              <label style={styles.label}>Phone Number</label>
+              <label className="text-sm font-medium">Phone Number</label>
 
               <input
                 value={phone}
                 onChange={(e) => setPhone(formatPhone(e.target.value))}
                 placeholder="(780) 123-4567"
-                style={styles.input}
+                className="w-full border rounded-lg p-2"
               />
 
-              <button type="submit" style={styles.button} disabled={loading}>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-green-600 text-white py-2 rounded-lg"
+              >
                 {loading ? "Securing Spot..." : "Secure My Territory"}
               </button>
             </>
           )}
 
-          {error && <p style={styles.error}>{error}</p>}
-
+          {error && (
+            <p className="text-sm text-red-500">{error}</p>
+          )}
         </form>
       </div>
     </div>
