@@ -5,7 +5,7 @@ import { sendSMS } from "@/lib/sms/sendSMS";
 export const runtime = "nodejs";
 
 // ===============================
-// CREATE LEAD + SMS TRIGGER
+// CREATE LEAD + STRIPE GATE + SMS
 // ===============================
 export async function POST(req) {
   try {
@@ -24,6 +24,31 @@ export async function POST(req) {
       return Response.json(
         { error: "Phone required" },
         { status: 400 }
+      );
+    }
+
+    // ===============================
+    // 🔐 STRIPE SUBSCRIPTION CHECK
+    // ===============================
+    const userEmail = req.headers.get("x-user-email");
+
+    if (!userEmail) {
+      return Response.json(
+        { error: "Missing user email" },
+        { status: 401 }
+      );
+    }
+
+    const { data: subscriber, error: subError } = await supabase
+      .from("subscribers")
+      .select("status")
+      .eq("email", userEmail)
+      .single();
+
+    if (subError || subscriber?.status !== "active") {
+      return Response.json(
+        { error: "Subscription required" },
+        { status: 403 }
       );
     }
 
